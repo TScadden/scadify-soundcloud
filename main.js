@@ -134,10 +134,24 @@ var SC = {
     return myspoti.storage.get('cid') || null;
   },
 
+  // The id is found by string surgery, never by running a pattern over a whole
+  // fetched page: the sandbox refuses a regular expression whose input is over
+  // 2 MB (the prelude's guard), and SoundCloud's bundles are bigger than that —
+  // the whole-bundle exec died with "RegExp.prototype.exec: too large" on the
+  // phone. Each 'client_id' mention is cut out with a small window around it
+  // and only the window is matched; a mention that is not an assignment with a
+  // full id (a reference, a short or dashed value) is passed over for the next.
   extractClientId: function (text) {
     if (!text) return null;
-    var m = /client_id["']?\s*[:=]\s*["']([A-Za-z0-9]{32})["']/.exec(text);
-    return m ? m[1] : null;
+    var re = /client_id["']?\s*[:=]\s*["']([A-Za-z0-9]{32})["']/;
+    var from = 0;
+    for (;;) {
+      var at = text.indexOf('client_id', from);
+      if (at < 0) return null;
+      var m = re.exec(text.slice(at, at + 256));
+      if (m) return m[1];
+      from = at + 'client_id'.length;
+    }
   },
 
   // Reads soundcloud.com and its script bundles until the client id turns up.
@@ -151,12 +165,19 @@ var SC = {
     }
     var cid = this.extractClientId(body);
     if (cid) { myspoti.storage.set('cid', cid); return cid; }
+    // The bundle addresses are collected the same way as the id: an indexOf
+    // scan, with the pattern run only on a small window at each hit — the
+    // homepage itself can be over the sandbox's 2 MB regex limit.
     var urls = [];
     var seen = {};
-    var re = /https:\/\/a-v2\.sndcdn\.com\/assets\/[0-9A-Za-z\-]+\.js/g;
-    var hit;
-    while ((hit = re.exec(body)) !== null) {
-      if (!seen[hit[0]]) { seen[hit[0]] = true; urls.push(hit[0]); }
+    var marker = 'https://a-v2.sndcdn.com/assets/';
+    var at = 0;
+    for (;;) {
+      at = body.indexOf(marker, at);
+      if (at < 0) break;
+      var hit = /https:\/\/a-v2\.sndcdn\.com\/assets\/[0-9A-Za-z\-]+\.js/.exec(body.slice(at, at + 512));
+      if (hit && !seen[hit[0]]) { seen[hit[0]] = true; urls.push(hit[0]); }
+      at += marker.length;
     }
     for (var i = 0; i < urls.length && i < 12; i += 4) {
       var batch = urls.slice(i, i + 4);

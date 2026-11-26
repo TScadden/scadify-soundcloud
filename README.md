@@ -77,7 +77,21 @@ GitHub workflow checks the tag against `manifest.json`, builds `extension.zip`
 and attaches it to the release.
 
 Scenario tests for the `myspoti-ext` desktop runner live in `tests/`
-(see the Orpheon extension API docs, section 7).
+(see the Orpheon extension API docs, section 7). A Node test harness that
+emulates the sandbox's size guards lives in `tests/shim/`:
+`node tests/shim/run.js`.
+
+## Changelog
+
+- **1.0.1** — Fixed the client id fetch failing on the extension page with
+  "RegExp.prototype.exec: too large". The app's extension sandbox refuses a
+  regular expression whose input is over 2 MB, and SoundCloud's JavaScript
+  bundles are bigger than that; the id and the bundle addresses are now found
+  by scanning small windows of the fetched pages with `indexOf`, so no pattern
+  ever runs over a whole page.
+- **1.0.0** — First release: SoundCloud results in search, full-song streaming
+  from SoundCloud, and a download only when SoundCloud offers a real
+  (progressive) file.
 
 ## License
 
